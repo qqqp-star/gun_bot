@@ -1,0 +1,1 @@
+worker: python gun_bot.py
