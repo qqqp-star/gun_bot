@@ -6,7 +6,11 @@ import time
 import re
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-# Добавь в начало gun_bot.py, после импортов:
+
+logging.basicConfig(level=logging.INFO)
+print("🚀 Запускаю гун-бота...")
+
+# ===== ВАЖНО: ДЛЯ RAILWAY =====
 import os
 
 # Получаем токен из переменных окружения Railway
@@ -14,20 +18,7 @@ TOKEN = os.getenv('BOT_TOKEN')
 if not TOKEN:
     print("❌ BOT_TOKEN не найден в переменных окружения")
     exit()
-logging.basicConfig(level=logging.INFO)
-print("🚀 Запускаю гун-бота...")
-
-# Читаем токен
-try:
-    with open('.env', 'r') as f:
-        for line in f:
-            if 'BOT_TOKEN' in line:
-                TOKEN = line.split('=')[1].strip()
-                break
-    print(f"✅ Токен получен: {TOKEN[:10]}...")
-except:
-    print("❌ Не могу прочитать .env файл")
-    exit()
+print(f"✅ Токен получен из окружения: {TOKEN[:10]}...")
 
 DATA_FILE = 'gun_data.json'
 COOLDOWN_FILE = 'cooldowns.json'
