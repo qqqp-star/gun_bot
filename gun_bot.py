@@ -11,9 +11,6 @@ logging.basicConfig(level=logging.INFO)
 print("🚀 Запускаю гун-бота...")
 
 # ===== ВАЖНО: ДЛЯ RAILWAY =====
-import os
-
-# Получаем токен из переменных окружения Railway
 TOKEN = os.getenv('BOT_TOKEN')
 if not TOKEN:
     print("❌ BOT_TOKEN не найден в переменных окружения")
@@ -53,7 +50,7 @@ def save_cooldowns():
     with open(COOLDOWN_FILE, 'w', encoding='utf-8') as f:
         json.dump(global_cooldowns, f, ensure_ascii=False, indent=2)
 
-# Английские команды для CommandHandler
+# Английские команды
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🤖 ГУН-БОТ @BHYTPEHHAYA_NENAVIST!\n\n"
@@ -80,11 +77,19 @@ async def gun(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
     
-    # Гуним
     litres = random.randint(15, 30)
     
     if user_id not in global_stats:
-        global_stats[user_id] = {'total': 0, 'count': 0, 'name': user.first_name}
+        global_stats[user_id] = {
+            'total': 0,
+            'count': 0,
+            'name': user.first_name,
+            'username': user.username
+        }
+    else:
+        # Обновляем имя и username при каждом использовании
+        global_stats[user_id]['name'] = user.first_name
+        global_stats[user_id]['username'] = user.username
     
     global_stats[user_id]['total'] += litres
     global_stats[user_id]['count'] += 1
@@ -138,16 +143,14 @@ async def topgunners(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg)
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает статистику пользователя или, для админа, отправляет файл с данными."""
     user = update.effective_user
     
-    # Если команду вызвал администратор (вы) — отправляем файл gun_data.json
+    # Если команду вызвал администратор — отправляем файл gun_data.json
     if user.id == ADMIN_ID:
         if not os.path.exists(DATA_FILE):
             await update.message.reply_text("Файл с данными ещё не создан.")
             return
         try:
-            # Открываем файл и отправляем как документ
             with open(DATA_FILE, 'rb') as f:
                 await context.bot.send_document(
                     chat_id=update.effective_chat.id,
@@ -169,7 +172,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg += f"💦 Всего пролито: {data['total']} литров\n"
         msg += f"🎯 Размер пиписьки: {data['count']}\n"
         
-        # Проверка кулдауна
         if user_id in global_cooldowns:
             time_left = 12 * 3600 - (time.time() - global_cooldowns[user_id])
             if time_left > 0:
@@ -197,28 +199,21 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "💦 @BHYTPEHHAYA_NENAVIST ждет твоей спермы!"
     )
 
-# --- НОВЫЙ ОБРАБОТЧИК ДЛЯ ЗАГРУЗКИ ФАЙЛА (ТОЛЬКО ДЛЯ АДМИНА) ---
+# Обработчик загрузки JSON от админа
 async def handle_admin_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Принимает JSON-файл от администратора и заменяет текущие данные."""
-    # Проверяем, что документ имеет расширение .json
     if not update.message.document.file_name.endswith('.json'):
         await update.message.reply_text("Пожалуйста, отправьте файл с расширением .json")
         return
 
-    # Скачиваем файл во временный файл
     file = await context.bot.get_file(update.message.document.file_id)
     temp_file = f"temp_{DATA_FILE}"
     try:
         await file.download_to_drive(temp_file)
 
-        # Проверяем, что файл содержит валидный JSON
         with open(temp_file, 'r', encoding='utf-8') as f:
             new_data = json.load(f)
 
-        # Если всё ок, заменяем основной файл
         os.replace(temp_file, DATA_FILE)
-
-        # Перезагружаем данные в глобальной переменной
         global global_stats
         global_stats = new_data
 
@@ -254,20 +249,20 @@ def main():
     try:
         application = Application.builder().token(TOKEN).build()
         
-        # Английские команды (обязательно!)
+        # Английские команды
         application.add_handler(CommandHandler("start", start))
         application.add_handler(CommandHandler("gun", gun))
         application.add_handler(CommandHandler("topgunners", topgunners))
         application.add_handler(CommandHandler("stats", stats))
         application.add_handler(CommandHandler("help", help_command))
         
-        # НОВЫЙ ОБРАБОТЧИК: приём документов только от администратора
+        # Приём JSON-файлов только от админа
         application.add_handler(MessageHandler(
             filters.Document.FileExtension("json") & filters.User(user_id=ADMIN_ID),
             handle_admin_document
         ))
         
-        # Русские команды через MessageHandler
+        # Русские команды
         application.add_handler(MessageHandler(
             filters.TEXT & filters.Regex(r'^/(старт|гунить|топгунеров|стата|помощь)(@\w+)?$'),
             handle_russian_command
