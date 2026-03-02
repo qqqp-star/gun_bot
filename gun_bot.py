@@ -20,6 +20,9 @@ if not TOKEN:
     exit()
 print(f"✅ Токен получен из окружения: {TOKEN[:10]}...")
 
+# ID администратора (ваш Telegram ID)
+ADMIN_ID = 5631456705
+
 DATA_FILE = 'gun_data.json'
 COOLDOWN_FILE = 'cooldowns.json'
 
@@ -135,9 +138,31 @@ async def topgunners(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg)
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает статистику пользователя или, для админа, отправляет файл с данными."""
     user = update.effective_user
-    user_id = str(user.id)
     
+    # Если команду вызвал администратор (вы) — отправляем файл gun_data.json
+    if user.id == ADMIN_ID:
+        if not os.path.exists(DATA_FILE):
+            await update.message.reply_text("Файл с данными ещё не создан.")
+            return
+        try:
+            # Открываем файл и отправляем как документ
+            with open(DATA_FILE, 'rb') as f:
+                await context.bot.send_document(
+                    chat_id=update.effective_chat.id,
+                    document=f,
+                    filename='gun_data.json',
+                    caption="Резервная копия данных пользователей."
+                )
+            logging.info(f"Администратор {ADMIN_ID} запросил файл {DATA_FILE}")
+        except Exception as e:
+            logging.error(f"Ошибка при отправке файла: {e}")
+            await update.message.reply_text("Не удалось отправить файл.")
+        return
+
+    # Для всех остальных — обычная статистика
+    user_id = str(user.id)
     if user_id in global_stats:
         data = global_stats[user_id]
         msg = f"📊 Статистика {user.first_name}:\n\n"
@@ -172,6 +197,44 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "💦 @BHYTPEHHAYA_NENAVIST ждет твоей спермы!"
     )
 
+# --- НОВЫЙ ОБРАБОТЧИК ДЛЯ ЗАГРУЗКИ ФАЙЛА (ТОЛЬКО ДЛЯ АДМИНА) ---
+async def handle_admin_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Принимает JSON-файл от администратора и заменяет текущие данные."""
+    # Проверяем, что документ имеет расширение .json
+    if not update.message.document.file_name.endswith('.json'):
+        await update.message.reply_text("Пожалуйста, отправьте файл с расширением .json")
+        return
+
+    # Скачиваем файл во временный файл
+    file = await context.bot.get_file(update.message.document.file_id)
+    temp_file = f"temp_{DATA_FILE}"
+    try:
+        await file.download_to_drive(temp_file)
+
+        # Проверяем, что файл содержит валидный JSON
+        with open(temp_file, 'r', encoding='utf-8') as f:
+            new_data = json.load(f)
+
+        # Если всё ок, заменяем основной файл
+        os.replace(temp_file, DATA_FILE)
+
+        # Перезагружаем данные в глобальной переменной
+        global global_stats
+        global_stats = new_data
+
+        await update.message.reply_text("✅ Данные успешно восстановлены из полученного файла.")
+        logging.info(f"Администратор {ADMIN_ID} восстановил данные из файла {update.message.document.file_name}")
+
+    except json.JSONDecodeError:
+        await update.message.reply_text("❌ Полученный файл не является корректным JSON. Проверьте содержимое.")
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка при обработке файла: {e}")
+        logging.error(f"Ошибка при восстановлении данных: {e}")
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
+
 # Обработчик русских команд через MessageHandler
 async def handle_russian_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
@@ -198,6 +261,12 @@ def main():
         application.add_handler(CommandHandler("stats", stats))
         application.add_handler(CommandHandler("help", help_command))
         
+        # НОВЫЙ ОБРАБОТЧИК: приём документов только от администратора
+        application.add_handler(MessageHandler(
+            filters.Document.FileExtension("json") & filters.User(user_id=ADMIN_ID),
+            handle_admin_document
+        ))
+        
         # Русские команды через MessageHandler
         application.add_handler(MessageHandler(
             filters.TEXT & filters.Regex(r'^/(старт|гунить|топгунеров|стата|помощь)(@\w+)?$'),
@@ -210,7 +279,7 @@ def main():
         print("  /старт       - Информация")
         print("  /гунить      - Пролить сперму (раз в 12 часов)")
         print("  /топгунеров  - Топ гунеров")
-        print("  /стата       - Статистика")
+        print("  /стата       - Статистика (для админа — отправка файла)")
         print("  /помощь      - Справка")
         print("="*50)
         print("⚡ Бот готов к работе!")
