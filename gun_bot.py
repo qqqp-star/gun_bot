@@ -258,7 +258,6 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         admin_settings['ping_friend_enabled'] = True
         save_settings()
         await query.edit_message_text("✅ Пинг друга включён.")
-        # Показываем меню заново через новое сообщение (или можно редактировать)
         await show_admin_menu_after_action(query, context)
     
     elif query.data == "ping_off":
@@ -270,7 +269,6 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "get_json":
         # Отправляем файл, не трогая меню
         await send_json_file(update, context)
-        # Можно дополнительно показать уведомление, но не обязательно
     
     elif query.data == "await_json":
         # Устанавливаем флаг ожидания JSON для админа
@@ -280,14 +278,12 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Отправь мне файл .json для восстановления данных.\n"
             "Чтобы отменить, просто ничего не отправляй."
         )
-        # После этого можно показать меню заново по кнопке "Обновить"
     
     elif query.data == "refresh_menu":
-        # Просто показываем меню заново
         await refresh_admin_menu(query, context)
     
     elif query.data == "noop":
-        # Ничего не делаем, просто игнорируем
+        # Ничего не делаем
         pass
 
 async def show_admin_menu_after_action(query, context):
@@ -384,6 +380,8 @@ async def handle_russian_command(update: Update, context: ContextTypes.DEFAULT_T
         await stats(update, context)
     elif text.startswith('/помощь'):
         await help_command(update, context)
+    elif text.startswith('/гунадмменю'):
+        await admin_menu(update, context)
 
 # ===== ОСНОВНАЯ ФУНКЦИЯ =====
 def main():
@@ -397,9 +395,6 @@ def main():
         application.add_handler(CommandHandler("stats", stats))
         application.add_handler(CommandHandler("help", help_command))
         
-        # Админская команда для вызова меню
-        application.add_handler(CommandHandler("гунадмменю", admin_menu))
-        
         # Callback для инлайн-кнопок
         application.add_handler(CallbackQueryHandler(admin_callback, pattern="^(ping_on|ping_off|get_json|await_json|refresh_menu|noop)$"))
         
@@ -409,9 +404,9 @@ def main():
             handle_admin_document
         ))
         
-        # Русские команды
+        # Русские команды (включая админскую)
         application.add_handler(MessageHandler(
-            filters.TEXT & filters.Regex(r'^/(старт|гунить|топгунеров|стата|помощь)(@\w+)?$'),
+            filters.TEXT & filters.Regex(r'^/(старт|гунить|топгунеров|стата|помощь|гунадмменю)(@\w+)?$'),
             handle_russian_command
         ))
         
